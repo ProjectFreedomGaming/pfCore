@@ -1,6 +1,6 @@
 # pfCore
 
-[![GPL-v3.0](https://img.shields.io/github/license/ProjectFreedomGaming/pfCore)](https://spdx.org/licenses/GPL-3.0-or-later.html) [![Phase](https://img.shields.io/badge/phase-research-green)](https://projectfreedom.io)
+[![GPL-v3.0](https://img.shields.io/github/license/ProjectFreedomGaming/pfCore)](https://spdx.org/licenses/GPL-3.0-or-later.html) [![Phase](https://img.shields.io/badge/phase-research-green)](https://projectfreedom.io) [![Latest Version](https://img.shields.io/github/v/tag/ProjectFreedomGaming/pfCore)](https://github.com/ProjectFreedomGaming/pfCore/tags)
   
 The Analog Pocket **pfx-1** core for [Project Freedom](https://projectfreedom.io).
 
