@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: 2023-present pfCore contributors
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[Platform]
+name = "pfx-1"
+image = "assets/pfx1-platform-image.png"
+# Core short names shall only contain lowercase alphanumeric characters (a-z, 0-9, underscore _) and have a maximum length of 15 characters.
+# The first character of the name may not be an underscore.
+short_name = "pfx1"
+category = "Fantasy"
+description = "An open-source fantasy gaming console for the Analog Pocket."
+info = "info.txt"
+
+[Build]
+version = "0.0.1"
+
+[Author]
+name = "ProjectFreedom"
+icon = "assets/pfx1-core-author-icon.png"
+url = "https://projectfreedom.io"
+
+[Bitstream]
+source = "$PF_POCKET_CORE_DEV_DIR/src/fpga/output_files/ap_core.rbf"
+
+[Video]
+width = 320
+height = 240
+aspect_w = 4
+aspect_h = 3
+rotation = 0
+mirror = 0

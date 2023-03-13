@@ -1,0 +1,5 @@
+Project Freedom's pfx-1 is a fantasy console, much like pico8, tic-80 or arduboy, but fully open-source and for the Analog Pocket platform.
+
+More information at https://projectfreedom.io
+
+The pfx-1 core source code and its entire development environment is distributed under the terms of the GPLv3.0 or later license. See https://spdx.org/licenses/GPL-3.0-or-later.html.

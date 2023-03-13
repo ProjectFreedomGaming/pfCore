@@ -1,0 +1,334 @@
+#!/usr/bin/env python3
+#
+# SPDX-FileCopyrightText: 2023-present pfSDK contributors
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+import os
+import sys
+import getopt
+import shutil
+import traceback
+
+from utils.pfScriptUtils import pfScriptUtils
+from datetime import date
+from pathlib import Path
+from typing import List
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+
+__version__ = '0.0.1'
+
+
+# -- Classes
+class pfBuildCore:
+    """A tool to build an analog pocket core"""
+
+    def __init__(self, args):
+        """Constructor based on command line arguments."""
+
+        try:
+            # -- Gather the arguments
+            opts, arguments = getopt.getopt(args, 'hvf', ['help', 'version', 'corefilename', 'debug'])
+
+            print_core_filename: bool = False
+
+            for o, a in opts:
+                if o in ('-h', '--help'):
+                    pfBuildCore.printUsage()
+                    sys.exit(0)
+                elif o in ('-v', '--version'):
+                    pfBuildCore.printVersion()
+                    sys.exit(0)
+                elif o in ('-f', '--corefilename'):
+                    print_core_filename = True
+                elif o in ('--debug'):
+                    # -- We ignore this argument because it was already dealt with in the calling main() code.
+                    continue
+
+            nb_of_arguments: int = len(arguments)
+            if print_core_filename is False and nb_of_arguments != 2:
+                raise RuntimeError('Invalid arguments. Maybe start with `pfBuildCore --help?')
+
+            self.config_filename: str = arguments[0]
+
+            components = os.path.splitext(self.config_filename)
+            if len(components) != 2 or components[1] != '.toml':
+                raise RuntimeError('Config file needs to be a toml file.')
+
+            if not os.path.exists(self.config_filename):
+                raise RuntimeError('File \'' + self.config_filename + '\' does not exist.')
+
+            self.config_file_folder = os.path.dirname(self.config_filename)
+
+            with open(self.config_filename, mode="rb") as fp:
+                self.config = tomllib.load(fp)
+
+            self.platform_config = self.config['Platform']
+            self.author_config = self.config['Author']
+            self.build_config = self.config['Build']
+            self.video_config = self.config['Video']
+
+            self.today = str(date.today())
+
+            if print_core_filename is True:
+                print(self.packagedFilename())
+                sys.exit(0)
+
+            self.destination_folder: str = arguments[1]
+
+            self.dependency_count = 0
+
+        except getopt.GetoptError:
+            print('Unknown option or argument. Maybe start with `pfBuildCore --help?')
+            sys.exit(0)
+
+    def generateDefinitionFiles(self, cores_folder, platforms_folder) -> None:
+        output_filename = os.path.join(cores_folder, 'audio.json')
+        with open(output_filename, 'w') as out_file:
+            out_file.write('{\n')
+            out_file.write('  "audio": {\n')
+            out_file.write('    "magic": "APF_VER_1"\n')
+            out_file.write('  }\n')
+            out_file.write('}\n')
+
+        output_filename = os.path.join(cores_folder, 'data.json')
+        with open(output_filename, 'w') as out_file:
+            out_file.write('{\n')
+            out_file.write('  "data": {\n')
+            out_file.write('    "magic": "APF_VER_1",\n')
+            out_file.write('    "data_slots": []\n')
+            out_file.write('  }\n')
+            out_file.write('}\n')
+
+        output_filename = os.path.join(cores_folder, 'input.json')
+        with open(output_filename, 'w') as out_file:
+            out_file.write('{\n')
+            out_file.write('  "input": {\n')
+            out_file.write('    "magic": "APF_VER_1",\n')
+            out_file.write('    "controllers": []\n')
+            out_file.write('  }\n')
+            out_file.write('}\n')
+
+        output_filename = os.path.join(cores_folder, 'variants.json')
+        with open(output_filename, 'w') as out_file:
+            out_file.write('{\n')
+            out_file.write('  "variants": {\n')
+            out_file.write('    "magic": "APF_VER_1",\n')
+            out_file.write('    "variant_list": []\n')
+            out_file.write('  }\n')
+            out_file.write('}\n')
+
+        output_filename = os.path.join(cores_folder, 'interact.json')
+        with open(output_filename, 'w') as out_file:
+            out_file.write('{\n')
+            out_file.write('  "interact": {\n')
+            out_file.write('    "magic": "APF_VER_1",\n')
+            out_file.write('    "variables": [],\n')
+            out_file.write('    "messages": []\n')
+            out_file.write('  }\n')
+            out_file.write('}\n')
+
+        output_filename = os.path.join(cores_folder, 'video.json')
+        with open(output_filename, 'w') as out_file:
+            out_file.write('{\n')
+            out_file.write('  "video": {\n')
+            out_file.write('    "magic": "APF_VER_1",\n')
+            out_file.write('    "scaler_modes": [\n')
+            out_file.write('      {\n')
+            out_file.write('        "width": %d,\n' % (self.video_config['width']))
+            out_file.write('        "height": %d,\n' % (self.video_config['height']))
+            out_file.write('        "aspect_w": %d,\n' % (self.video_config['aspect_w']))
+            out_file.write('        "aspect_h": %d,\n' % (self.video_config['aspect_h']))
+            out_file.write('        "rotation": %d,\n' % (self.video_config['rotation']))
+            out_file.write('        "mirror": %d\n' % (self.video_config['mirror']))
+            out_file.write('      }\n')
+            out_file.write('    ]\n')
+            out_file.write('  }\n')
+            out_file.write('}\n')
+
+        output_filename = os.path.join(platforms_folder, '%s.json' % (self.platform_config['short_name']))
+        with open(output_filename, 'w') as out_file:
+            out_file.write('{\n')
+            out_file.write('  "platform": {\n')
+            out_file.write('    "category": "%s",\n' % (self.platform_config['category']))
+            out_file.write('    "name": "%s",\n' % (self.platform_config['name']))
+            out_file.write('    "year": %s,\n' % (self.today.split('-')[0]))
+            out_file.write('    "manufacturer": "%s"\n' % (self.author_config['name']))
+            out_file.write('  }\n')
+            out_file.write('}\n')
+
+        output_filename = os.path.join(cores_folder, 'core.json')
+        with open(output_filename, 'w') as out_file:
+            out_file.write('{\n')
+            out_file.write('  "core": {\n')
+            out_file.write('    "magic": "APF_VER_1",\n')
+            out_file.write('    "metadata": {\n')
+            out_file.write('      "platform_ids": ["%s"],\n' % (self.platform_config['short_name']))
+            out_file.write('      "shortname": "%s",\n' % (self.platform_config['short_name']))
+            out_file.write('      "description": "%s",\n' % (self.platform_config['description']))
+            out_file.write('      "author": "%s",\n' % (self.author_config['name']))
+            out_file.write('      "url": "%s",\n' % (self.author_config['url']))
+            out_file.write('      "version": "%s",\n' % (self.build_config['version']))
+            out_file.write('      "date_release": "%s"\n' % (self.today))
+            out_file.write('    },\n')
+            out_file.write('    "framework": {\n')
+            out_file.write('      "target_product": "Analogue Pocket",\n')
+            out_file.write('      "version_required": "1.1",\n')
+            out_file.write('      "sleep_supported": false,\n')
+            out_file.write('      "dock": {\n')
+            out_file.write('        "supported": true,\n')
+            out_file.write('        "analog_output": false\n')
+            out_file.write('      },\n')
+            out_file.write('      "hardware": {\n')
+            out_file.write('        "link_port": false,\n')
+            out_file.write('        "cartridge_adapter": -1\n')
+            out_file.write('      }\n')
+            out_file.write('    },\n')
+            out_file.write('    "cores": [\n')
+            out_file.write('      {\n')
+            out_file.write('        "name": "default",\n')
+            out_file.write('        "id": 0,\n')
+            out_file.write('        "filename": "%s.rbf_r"\n' % (self.platform_config['short_name']))
+            out_file.write('      }\n')
+            out_file.write('    ]\n')
+            out_file.write('  }\n')
+            out_file.write('}\n')
+
+    def convertImages(self, cores_folder, platforms_image_folder, dep_file) -> None:
+        convert_image_command = os.path.join('bin', 'pfConvertImage')
+
+        src_image_file = os.path.join(self.config_file_folder, self.platform_config['image'])
+        dest_bin_file = os.path.join(platforms_image_folder, '%s.bin' % (self.platform_config['short_name']))
+        pfScriptUtils.shellCommand([convert_image_command, src_image_file, dest_bin_file])
+        self.addDependency(dep_file, src_image_file)
+
+        src_image_file = os.path.join(self.config_file_folder, self.author_config['icon'])
+        dest_bin_file = os.path.join(cores_folder, 'icon.bin')
+        pfScriptUtils.shellCommand([convert_image_command, src_image_file, dest_bin_file])
+        self.addDependency(dep_file, src_image_file)
+
+        self.addDependency(dep_file, convert_image_command)
+
+    def outputFilename(self):
+        return os.path.join(self.destination_folder, self.packagedFilename())
+
+    def packageCore(self):
+        deps = []
+        packaged_filename = self.packagedFilename()
+
+        arguments: List[str] = ['zip', '-r', packaged_filename]
+        for p in Path(self.destination_folder).rglob('*'):
+            extension = p.suffix
+            if not os.path.isdir(p) and not extension == '.zip' and not extension == '.d':
+                arguments.append(str(p.relative_to(self.destination_folder)))
+                deps.append(str(p))
+
+        pfScriptUtils.shellCommand(arguments, from_dir=self.destination_folder)
+
+    def addDependency(self, dep_file, dep):
+        if self.dependency_count == 0:
+            output_filename = os.path.join(self.destination_folder, self.packagedFilename())
+            dep_file.write('%s: %s' % (output_filename.replace(' ', '\\ '), self.config_filename))
+
+        dep_file.write(' \\\n %s' % (dep))
+
+        self.dependency_count += 1
+
+    def fullPlatformName(self) -> str:
+        return '%s.%s' % (self.author_config['name'], self.platform_config['short_name'])
+
+    def packagedFilename(self) -> str:
+        return '%s-%s-%s.zip' % (self.fullPlatformName(), self.build_config['version'], self.today)
+
+    def main(self) -> None:
+        os.makedirs(self.destination_folder, exist_ok=True)
+
+        full_platform_name = self.fullPlatformName()
+        cores_folder = os.path.join(self.destination_folder, 'Cores', full_platform_name)
+        os.makedirs(cores_folder, exist_ok=True)
+
+        platforms_folder = os.path.join(self.destination_folder, 'Platforms')
+        os.makedirs(platforms_folder, exist_ok=True)
+
+        platforms_image_folder = os.path.join(platforms_folder, '_images')
+        os.makedirs(platforms_image_folder, exist_ok=True)
+
+        dependency_filename = os.path.join(self.destination_folder, 'deps.d')
+        with open(dependency_filename, 'w') as dep_file:
+            reverse_bitstream_command = os.path.join('bin', 'pfReverseBitstream')
+
+            print('Building bitstream file...')
+            bitstream_source = os.path.expandvars(self.config['Bitstream']['source'])
+            bitstream_dest = os.path.join(cores_folder, '%s.rbf_r' % (self.platform_config['short_name']))
+            pfScriptUtils.shellCommand([reverse_bitstream_command, bitstream_source, bitstream_dest])
+
+            self.addDependency(dep_file, bitstream_source)
+            self.addDependency(dep_file, reverse_bitstream_command)
+
+            print('Generating definitions files...')
+            self.generateDefinitionFiles(cores_folder, platforms_folder)
+
+            print('Converting images...')
+            self.convertImages(cores_folder, platforms_image_folder, dep_file)
+
+            if 'info' in self.platform_config:
+                src_info = os.path.join(self.config_file_folder, self.platform_config['info'])
+                dest_info = os.path.join(cores_folder, 'info.txt')
+                shutil.copyfile(src_info, dest_info)
+
+                self.addDependency(dep_file, src_info)
+
+            dep_file.write('\n')
+
+            print('Packaging core...')
+            self.packageCore()
+
+    @classmethod
+    def printUsage(cls) -> None:
+        pfBuildCore.printVersion()
+        print('')
+        print('usage: pfBuildCore <options> config_file destination_folder')
+        print('')
+        print('The following options are supported:')
+        print('')
+        print('   --help/-h          - Show a help message.')
+        print('   --version/-v       - Display the app\'s version.')
+        print('   --debug            - Enable extra debugging information.')
+        print('')
+
+    @classmethod
+    def printVersion(cls) -> None:
+        print('🛠️  pfBuildCore v' + __version__ + ' 🛠️')
+
+
+def main():
+    _debug_on = False
+
+    try:
+        if '--debug' in sys.argv:
+            print('Enabling debugging information.')
+            _debug_on = True
+
+        # -- Remove the first argument (which is the script filename)
+        build = pfBuildCore(sys.argv[1:])
+
+        if build is not None:
+            build.main()
+    except Exception as e:
+        if _debug_on is True:
+            print(traceback.format_exc())
+        else:
+            print(e)
+
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print('Execution interrupted by user.')
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()
